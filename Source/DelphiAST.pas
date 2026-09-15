@@ -65,6 +65,10 @@ type
   protected
     FStack: TNodeStack;
     FComments: TObjectList<TCommentNode>;
+    { Set by ClassClass when `class` prefixes a var or const section, where the
+      member node does not exist yet. Consumed by ClassField and
+      ConstantDeclaration, and cleared per member by ClassMethodOrProperty. }
+    FClassPrefix: Boolean;
     procedure AccessSpecifier; override;
     procedure AdditiveOperator; override;
     procedure AddressOp; override;
@@ -93,6 +97,7 @@ type
     procedure ClassMethod; override;
     procedure ClassMethodResolution; override;
     procedure ClassMethodHeading; override;
+    procedure ClassMethodOrProperty; override;
     procedure ClassProcedureHeading; override;
     procedure ClassProperty; override;
     procedure ClassReferenceType; override;
@@ -749,7 +754,21 @@ end;
 
 procedure TPasSyntaxTreeBuilder.ClassClass;
 begin
-  FStack.Peek.SetAttribute(anClass, AttributeValues[atTrue]);
+  { `class` prefixes a method, a property, a var section or a const section.
+    For methods and properties the owning node has already been pushed, so the
+    attribute can be set directly. For `class var` and `class const` no member
+    node exists yet - and one section can introduce several members - so record
+    the prefix instead and let ClassField / ConstantDeclaration apply it. }
+  if FStack.Peek.Typ in [ntMethod, ntProperty] then
+    FStack.Peek.SetAttribute(anClass, AttributeValues[atTrue])
+  else
+    FClassPrefix := True;
+  inherited;
+end;
+
+procedure TPasSyntaxTreeBuilder.ClassMethodOrProperty;
+begin
+  FClassPrefix := False;
   inherited;
 end;
 
@@ -777,6 +796,8 @@ begin
       Temp := FStack.Push(ntField);
       try
         Temp.AssignPositionFrom(Field);
+        if FClassPrefix then
+          Temp.SetAttribute(anClass, AttributeValues[atTrue]);
 
         FStack.AddChild(Field.Clone);
         TypeInfo := TypeInfo.Clone;
@@ -937,6 +958,8 @@ procedure TPasSyntaxTreeBuilder.ConstantDeclaration;
 begin
   FStack.Push(ntConstant);
   try
+    if FClassPrefix then
+      FStack.Peek.SetAttribute(anClass, AttributeValues[atTrue]);
     inherited;
   finally
     FStack.Pop;
