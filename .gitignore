@@ -98,3 +98,6 @@ $RECYCLE.BIN/
 *.o
 *.compiled
 
+
+# Vallenta Studio / VS Code Delphi tooling cache
+.vsdcache/
